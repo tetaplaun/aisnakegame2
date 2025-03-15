@@ -152,13 +152,13 @@ class DualSnakeEnv:
         head1_x, head1_y = self.snake1[0]
         head2_x, head2_y = self.snake2[0]
         
-        # Calculate initial distances using wrap-around grid logic
-        dx1 = min(abs(food_x - head1_x), self.grid_size - abs(food_x - head1_x))
-        dy1 = min(abs(food_y - head1_y), self.grid_size - abs(food_y - head1_y))
+        # Calculate initial distances (Manhattan distance)
+        dx1 = abs(food_x - head1_x)
+        dy1 = abs(food_y - head1_y)
         self.prev_food_distance_snake1 = dx1 + dy1
         
-        dx2 = min(abs(food_x - head2_x), self.grid_size - abs(food_x - head2_x))
-        dy2 = min(abs(food_y - head2_y), self.grid_size - abs(food_y - head2_y))
+        dx2 = abs(food_x - head2_x)
+        dy2 = abs(food_y - head2_y)
         self.prev_food_distance_snake2 = dx2 + dy2
         
         # Return observation
@@ -226,17 +226,17 @@ class DualSnakeEnv:
         x, y = head
         
         if direction == Direction.UP:
-            return (x, (y - 1) % self.grid_size)
+            return (x, y - 1)
         elif direction == Direction.RIGHT:
-            return ((x + 1) % self.grid_size, y)
+            return (x + 1, y)
         elif direction == Direction.DOWN:
-            return (x, (y + 1) % self.grid_size)
+            return (x, y + 1)
         elif direction == Direction.LEFT:
-            return ((x - 1) % self.grid_size, y)
+            return (x - 1, y)
     
     def _check_collision(self, head):
         x, y = head
-        
+            
         # Check if hit wall
         if self.grid[y, x] == GameElement.WALL.value:
             return True
@@ -292,16 +292,37 @@ class DualSnakeEnv:
         # Get new head position
         new_head = self._get_new_head_position(head, direction)
         
-        # Check if teleport through portal
-        portal_exit = self._check_portal_teleport(new_head)
-        if portal_exit:
-            new_head = portal_exit
+        # Check for boundary collision first
+        if (new_head[0] < 0 or new_head[0] >= self.grid_size or 
+            new_head[1] < 0 or new_head[1] >= self.grid_size):
+            # Hit boundary - game over
+            collision = True
+        else:
+            # If within bounds, check for portal teleport
+            portal_exit = self._check_portal_teleport(new_head)
+            if portal_exit:
+                new_head = portal_exit
+            
+            # Check other collisions
+            collision = self._check_collision(new_head)
         
-        # Check collision
-        collision = self._check_collision(new_head)
+        # Check for boundary collision first
+        is_boundary_collision = new_head[0] < 0 or new_head[0] >= self.grid_size or new_head[1] < 0 or new_head[1] >= self.grid_size
         
-        # If collision and no power-up, game over for this snake
-        if collision and not power_up_active:
+        # If boundary collision, game over - power-up cannot save from boundary collision
+        if is_boundary_collision:
+            if snake_id == 1:
+                self.winner = 2
+            else:
+                self.winner = 1
+            self.done = True
+            
+            # Large penalty for hitting boundary
+            snake_length = self.snake1_length if snake_id == 1 else self.snake2_length
+            death_penalty = -20 - (snake_length * 2)
+            return death_penalty
+        # If other collision and no power-up, game over for this snake
+        elif collision and not power_up_active:
             if snake_id == 1:
                 self.winner = 2
             else:
@@ -372,11 +393,11 @@ class DualSnakeEnv:
             # Place new food
             self.food = self._place_element(GameElement.FOOD)
             
-            # Progressive reward for eating food
-            # Base reward (10) + length-based bonus that scales quadratically
+            # Significantly increased reward for eating food
+            # Base reward (25) + length-based bonus that scales quadratically
             snake_length = self.snake1_length if snake_id == 1 else self.snake2_length
-            length_bonus = 2 * (snake_length ** 0.5)  # Square root scaling for balanced progression
-            reward += food_score + length_bonus
+            length_bonus = 5 * (snake_length ** 0.75)  # Higher scaling for better progression
+            reward += food_score + length_bonus + 20  # Extra bonus to prioritize food collection
         else:
             # Remove tail if didn't eat
             tail = snake.pop()
@@ -452,31 +473,31 @@ class DualSnakeEnv:
                 food_x, food_y = self.food
                 head_x, head_y = head
                 
-                # Calculate distance using modulo for wrap-around grid (shortest path)
-                dx = min(abs(food_x - head_x), self.grid_size - abs(food_x - head_x))
-                dy = min(abs(food_y - head_y), self.grid_size - abs(food_y - head_y))
+                # Calculate Manhattan distance (no wrap-around)
+                dx = abs(food_x - head_x)
+                dy = abs(food_y - head_y)
                 current_distance = dx + dy
                 
                 # Store distance for next step comparison
                 if snake_id == 1:
                     if hasattr(self, 'prev_food_distance_snake1'):
-                        # Reward for getting closer to food (or penalize for moving away)
+                        # Enhanced reward for getting closer to food (or penalize for moving away)
                         distance_change = self.prev_food_distance_snake1 - current_distance
                         if distance_change > 0:  # Got closer to food
-                            rewards[f"snake{snake_id}"] += 0.05 * distance_change
+                            rewards[f"snake{snake_id}"] += 0.15 * distance_change  # Increased reward for moving toward food
                         elif distance_change < 0:  # Moved away from food
-                            rewards[f"snake{snake_id}"] -= 0.02 * abs(distance_change)
+                            rewards[f"snake{snake_id}"] -= 0.1 * abs(distance_change)  # Stronger penalty for moving away
                     
                     # Update the stored distance
                     self.prev_food_distance_snake1 = current_distance
                 else:
                     if hasattr(self, 'prev_food_distance_snake2'):
-                        # Reward for getting closer to food (or penalize for moving away)
+                        # Enhanced reward for getting closer to food (or penalize for moving away)
                         distance_change = self.prev_food_distance_snake2 - current_distance
                         if distance_change > 0:  # Got closer to food
-                            rewards[f"snake{snake_id}"] += 0.05 * distance_change
+                            rewards[f"snake{snake_id}"] += 0.15 * distance_change  # Increased reward for moving toward food
                         elif distance_change < 0:  # Moved away from food
-                            rewards[f"snake{snake_id}"] -= 0.02 * abs(distance_change)
+                            rewards[f"snake{snake_id}"] -= 0.1 * abs(distance_change)  # Stronger penalty for moving away
                     
                     # Update the stored distance
                     self.prev_food_distance_snake2 = current_distance
@@ -484,15 +505,19 @@ class DualSnakeEnv:
             # Reward/penalty system that scales with snake length
             snake_length = self.snake1_length if snake_id == 1 else self.snake2_length
             
-            # Small step penalty to encourage efficiency, diminishing with length
-            # (less penalty for longer snakes to encourage growth over quick paths)
-            length_factor = max(0.05, 1.0 / (1 + 0.1 * snake_length))  # Reduces penalty as snake grows
-            rewards[f"snake{snake_id}"] -= 0.01 * length_factor
+            # Very small step penalty to encourage efficiency
+            # (less penalty for longer snakes to encourage growth)
+            length_factor = max(0.01, 1.0 / (1 + 0.2 * snake_length))  # Reduced penalty as snake grows
+            rewards[f"snake{snake_id}"] -= 0.005 * length_factor
             
-            # Small survival reward that increases with snake length
+            # Increased survival reward that scales with snake length
             # This encourages the agent to grow and stay alive longer
-            survival_bonus = 0.005 * (1 + 0.05 * snake_length)
+            survival_bonus = 0.01 * (1 + 0.1 * snake_length)
             rewards[f"snake{snake_id}"] += survival_bonus
+            
+            # Add extra reward based on snake length to encourage growth
+            growth_bonus = 0.02 * snake_length
+            rewards[f"snake{snake_id}"] += growth_bonus
         
         # Check for max steps reached
         if self.steps >= self.max_steps:
