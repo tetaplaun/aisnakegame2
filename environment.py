@@ -26,6 +26,11 @@ class GameElement(Enum):
     SNAKE2_HEAD = 9
 
 
+class TrainingMode(Enum):
+    REGULAR = 0      # Regular game with all features
+    SIMPLIFIED = 1   # Simplified environment with fewer obstacles and no power-ups
+
+
 class DualSnakeEnv:
     def __init__(self, grid_size=20, max_steps=1000, render_mode=None):
         self.grid_size = grid_size
@@ -637,3 +642,269 @@ class DualSnakeEnv:
     def close(self):
         if self.render_mode == 'human':
             pygame.quit()
+
+
+class SimplifiedDualSnakeEnv(DualSnakeEnv):
+    """A simplified version of the DualSnakeEnv with fewer obstacles and no power-ups.
+    This environment is designed for more effective training by reducing complexity.
+    """
+    def __init__(self, grid_size=20, max_steps=1000, render_mode=None, wall_count=3):
+        """
+        Args:
+            grid_size: Size of the grid
+            max_steps: Maximum steps per episode
+            render_mode: Rendering mode ('human' or None)
+            wall_count: Number of walls to place (default: 3, much fewer than regular environment)
+        """
+        self.wall_count = wall_count
+        super().__init__(grid_size, max_steps, render_mode)
+    
+    def _create_random_obstacles(self):
+        """Override to create fewer obstacles and no portals"""
+        # Add just a few walls for minimal obstacle learning
+        for _ in range(self.wall_count):
+            while True:
+                x = random.randint(0, self.grid_size - 1)
+                y = random.randint(0, self.grid_size - 1)
+                
+                # Don't place walls at initial snake positions or too close to them
+                if (x, y) in self.snake1 or (x, y) in self.snake2 or \
+                   abs(x - self.snake1[0][0]) < 3 or abs(y - self.snake1[0][1]) < 3 or \
+                   abs(x - self.snake2[0][0]) < 3 or abs(y - self.snake2[0][1]) < 3:
+                    continue
+                    
+                self.grid[y, x] = GameElement.WALL.value
+                break
+        
+        # No portals in simplified environment
+    
+    def step(self, actions):
+        """Override to disable power-ups and speed boosts"""
+        if self.done:
+            return self._get_observation(), {"snake1": 0, "snake2": 0}, self.done, {"winner": self.winner, "score1": self.score1, "score2": self.score2}
+        
+        rewards = {"snake1": 0, "snake2": 0}
+        
+        # Move snakes based on their speed
+        self.snake1_steps_to_move -= 1
+        self.snake2_steps_to_move -= 1
+        
+        if self.snake1_steps_to_move <= 0:
+            rewards["snake1"] += self._move_snake(1, actions["snake1"])
+        
+        if self.snake2_steps_to_move <= 0:
+            rewards["snake2"] += self._move_snake(2, actions["snake2"])
+        
+        # Process other game elements
+        self.steps += 1
+        
+        # Advanced reward system that considers distance to food
+        for snake_id in [1, 2]:
+            snake = self.snake1 if snake_id == 1 else self.snake2
+            if len(snake) > 0:  # Make sure snake still exists
+                head = snake[0]
+                # Calculate Manhattan distance to food
+                food_x, food_y = self.food
+                head_x, head_y = head
+                
+                # Calculate Manhattan distance (no wrap-around)
+                dx = abs(food_x - head_x)
+                dy = abs(food_y - head_y)
+                current_distance = dx + dy
+                
+                # Store distance for next step comparison
+                if snake_id == 1:
+                    if hasattr(self, 'prev_food_distance_snake1'):
+                        # Enhanced reward for getting closer to food (or penalize for moving away)
+                        distance_change = self.prev_food_distance_snake1 - current_distance
+                        if distance_change > 0:  # Got closer to food
+                            rewards[f"snake{snake_id}"] += 0.15 * distance_change  # Increased reward for moving toward food
+                        elif distance_change < 0:  # Moved away from food
+                            rewards[f"snake{snake_id}"] -= 0.1 * abs(distance_change)  # Stronger penalty for moving away
+                    
+                    # Update the stored distance
+                    self.prev_food_distance_snake1 = current_distance
+                else:
+                    if hasattr(self, 'prev_food_distance_snake2'):
+                        # Enhanced reward for getting closer to food (or penalize for moving away)
+                        distance_change = self.prev_food_distance_snake2 - current_distance
+                        if distance_change > 0:  # Got closer to food
+                            rewards[f"snake{snake_id}"] += 0.15 * distance_change  # Increased reward for moving toward food
+                        elif distance_change < 0:  # Moved away from food
+                            rewards[f"snake{snake_id}"] -= 0.1 * abs(distance_change)  # Stronger penalty for moving away
+                    
+                    # Update the stored distance
+                    self.prev_food_distance_snake2 = current_distance
+            
+            # Reward/penalty system that scales with snake length
+            snake_length = self.snake1_length if snake_id == 1 else self.snake2_length
+            
+            # Very small step penalty to encourage efficiency
+            # (less penalty for longer snakes to encourage growth)
+            length_factor = max(0.01, 1.0 / (1 + 0.2 * snake_length))  # Reduced penalty as snake grows
+            rewards[f"snake{snake_id}"] -= 0.005 * length_factor
+            
+            # Increased survival reward that scales with snake length
+            # This encourages the agent to grow and stay alive longer
+            survival_bonus = 0.01 * (1 + 0.1 * snake_length)
+            rewards[f"snake{snake_id}"] += survival_bonus
+            
+            # Add extra reward based on snake length to encourage growth
+            growth_bonus = 0.02 * snake_length
+            rewards[f"snake{snake_id}"] += growth_bonus
+        
+        # Check for max steps reached
+        if self.steps >= self.max_steps:
+            self.done = True
+            # Winner is the snake with the highest score
+            if self.score1 > self.score2:
+                self.winner = 1
+            elif self.score2 > self.score1:
+                self.winner = 2
+            else:
+                # In case of tie, winner is the snake with the longest length
+                if self.snake1_length > self.snake2_length:
+                    self.winner = 1
+                else:
+                    self.winner = 2
+        
+        # No power-ups or speed boosts in simplified environment
+        
+        # Render if needed
+        if self.render_mode == 'human':
+            self.render()
+        
+        return self._get_observation(), rewards, self.done, {"winner": self.winner, "score1": self.score1, "score2": self.score2}
+
+
+class SimplifiedDualSnakeEnv(DualSnakeEnv):
+    """A simplified version of the DualSnakeEnv with fewer obstacles and no power-ups.
+    This environment is designed for more effective training by reducing complexity.
+    """
+    def __init__(self, grid_size=20, max_steps=1000, render_mode=None, wall_count=3):
+        """
+        Args:
+            grid_size: Size of the grid
+            max_steps: Maximum steps per episode
+            render_mode: Rendering mode ('human' or None)
+            wall_count: Number of walls to place (default: 3, much fewer than regular environment)
+        """
+        self.wall_count = wall_count
+        super().__init__(grid_size, max_steps, render_mode)
+    
+    def _create_random_obstacles(self):
+        """Override to create fewer obstacles and no portals"""
+        # Add just a few walls for minimal obstacle learning
+        for _ in range(self.wall_count):
+            while True:
+                x = random.randint(0, self.grid_size - 1)
+                y = random.randint(0, self.grid_size - 1)
+                
+                # Don't place walls at initial snake positions or too close to them
+                if (x, y) in self.snake1 or (x, y) in self.snake2 or \
+                   abs(x - self.snake1[0][0]) < 3 or abs(y - self.snake1[0][1]) < 3 or \
+                   abs(x - self.snake2[0][0]) < 3 or abs(y - self.snake2[0][1]) < 3:
+                    continue
+                    
+                self.grid[y, x] = GameElement.WALL.value
+                break
+        
+        # No portals in simplified environment
+    
+    def step(self, actions):
+        """Override to disable power-ups and speed boosts"""
+        if self.done:
+            return self._get_observation(), {"snake1": 0, "snake2": 0}, self.done, {"winner": self.winner, "score1": self.score1, "score2": self.score2}
+        
+        rewards = {"snake1": 0, "snake2": 0}
+        
+        # Move snakes based on their speed
+        self.snake1_steps_to_move -= 1
+        self.snake2_steps_to_move -= 1
+        
+        if self.snake1_steps_to_move <= 0:
+            rewards["snake1"] += self._move_snake(1, actions["snake1"])
+        
+        if self.snake2_steps_to_move <= 0:
+            rewards["snake2"] += self._move_snake(2, actions["snake2"])
+        
+        # Process other game elements
+        self.steps += 1
+        
+        # Advanced reward system that considers distance to food
+        for snake_id in [1, 2]:
+            snake = self.snake1 if snake_id == 1 else self.snake2
+            if len(snake) > 0:  # Make sure snake still exists
+                head = snake[0]
+                # Calculate Manhattan distance to food
+                food_x, food_y = self.food
+                head_x, head_y = head
+                
+                # Calculate Manhattan distance (no wrap-around)
+                dx = abs(food_x - head_x)
+                dy = abs(food_y - head_y)
+                current_distance = dx + dy
+                
+                # Store distance for next step comparison
+                if snake_id == 1:
+                    if hasattr(self, 'prev_food_distance_snake1'):
+                        # Enhanced reward for getting closer to food (or penalize for moving away)
+                        distance_change = self.prev_food_distance_snake1 - current_distance
+                        if distance_change > 0:  # Got closer to food
+                            rewards[f"snake{snake_id}"] += 0.15 * distance_change  # Increased reward for moving toward food
+                        elif distance_change < 0:  # Moved away from food
+                            rewards[f"snake{snake_id}"] -= 0.1 * abs(distance_change)  # Stronger penalty for moving away
+                    
+                    # Update the stored distance
+                    self.prev_food_distance_snake1 = current_distance
+                else:
+                    if hasattr(self, 'prev_food_distance_snake2'):
+                        # Enhanced reward for getting closer to food (or penalize for moving away)
+                        distance_change = self.prev_food_distance_snake2 - current_distance
+                        if distance_change > 0:  # Got closer to food
+                            rewards[f"snake{snake_id}"] += 0.15 * distance_change  # Increased reward for moving toward food
+                        elif distance_change < 0:  # Moved away from food
+                            rewards[f"snake{snake_id}"] -= 0.1 * abs(distance_change)  # Stronger penalty for moving away
+                    
+                    # Update the stored distance
+                    self.prev_food_distance_snake2 = current_distance
+            
+            # Reward/penalty system that scales with snake length
+            snake_length = self.snake1_length if snake_id == 1 else self.snake2_length
+            
+            # Very small step penalty to encourage efficiency
+            # (less penalty for longer snakes to encourage growth)
+            length_factor = max(0.01, 1.0 / (1 + 0.2 * snake_length))  # Reduced penalty as snake grows
+            rewards[f"snake{snake_id}"] -= 0.005 * length_factor
+            
+            # Increased survival reward that scales with snake length
+            # This encourages the agent to grow and stay alive longer
+            survival_bonus = 0.01 * (1 + 0.1 * snake_length)
+            rewards[f"snake{snake_id}"] += survival_bonus
+            
+            # Add extra reward based on snake length to encourage growth
+            growth_bonus = 0.02 * snake_length
+            rewards[f"snake{snake_id}"] += growth_bonus
+        
+        # Check for max steps reached
+        if self.steps >= self.max_steps:
+            self.done = True
+            # Winner is the snake with the highest score
+            if self.score1 > self.score2:
+                self.winner = 1
+            elif self.score2 > self.score1:
+                self.winner = 2
+            else:
+                # In case of tie, winner is the snake with the longest length
+                if self.snake1_length > self.snake2_length:
+                    self.winner = 1
+                else:
+                    self.winner = 2
+        
+        # No power-ups or speed boosts in simplified environment
+        
+        # Render if needed
+        if self.render_mode == 'human':
+            self.render()
+        
+        return self._get_observation(), rewards, self.done, {"winner": self.winner, "score1": self.score1, "score2": self.score2}

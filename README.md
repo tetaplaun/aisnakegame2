@@ -35,6 +35,8 @@ The project implements two different RL approaches:
 ## Project Structure
 
 - `environment.py`: The game environment implementing the dual snake game
+  - `DualSnakeEnv`: Full-featured snake environment with all game elements
+  - `SimplifiedDualSnakeEnv`: Simplified environment with fewer obstacles and no power-ups (for more effective training)
 - `run_game.py`: Script to run the game with random actions (for testing)
 - `models/`: Neural network model definitions
   - `dqn_model.py`: DQN and Dueling DQN model architectures
@@ -42,7 +44,8 @@ The project implements two different RL approaches:
 - `training/`: Agent implementations and training code
   - `dqn_agent.py`: DQN agent implementation
   - `ac_agent.py`: Actor-Critic agent implementation
-- `train_both_agents.py`: Script to train both agents and save models
+- `train_both_agents.py`: Script to train both agents in the full environment
+- `train_simplified.py`: Script to train both agents in the simplified environment
 - `pit_agents.py`: Script to evaluate trained agents against each other
 - `saved_models/`: Directory for saved model checkpoints
 - `plots/`: Directory for training and evaluation plots
@@ -68,9 +71,17 @@ The project implements two different RL approaches:
    ```
 
 3. Train both agents:
+
+   **Regular environment (with all features):**
    ```
    python train_both_agents.py --episodes 1000 --grid-size 20
    ```
+   
+   **Simplified environment (for more effective training):**
+   ```
+   python train_simplified.py --episodes 5000 --grid-size 20 --wall-count 3
+   ```
+   
    Additional options:
    - `--render`: Render training episodes
    - `--save-freq`: Frequency to save model checkpoints
@@ -78,11 +89,16 @@ The project implements two different RL approaches:
    - `--device`: Device to run training on (cuda/cpu)
    - `--load-dqn`: Path to existing DQN model to continue training
    - `--load-a2c`: Path to existing A2C model to continue training
+   - `--wall-count`: Number of walls in simplified environment (only for train_simplified.py)
    
    To continue training from saved models:
    ```
    python train_both_agents.py --episodes 500 --load-dqn saved_models/dqn_snake1/model_episode_1000.pth --load-a2c saved_models/a2c_snake2/model_episode_1000.pth
    ```
+   
+   Recommended training approach:
+   1. Start with simplified environment to learn basic navigation and food collection
+   2. Continue training in the full environment to learn advanced strategies
 
 4. Evaluate trained agents against each other:
    ```
