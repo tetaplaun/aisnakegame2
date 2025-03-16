@@ -46,9 +46,11 @@ The project implements two different RL approaches:
   - `ac_agent.py`: Actor-Critic agent implementation
 - `train_both_agents.py`: Script to train both agents in the full environment
 - `train_simplified.py`: Script to train both agents in the simplified environment
-- `pit_agents.py`: Script to evaluate trained agents against each other
+- `pit_agents.py`: Script to evaluate trained agents against each other in the full environment
+- `pit_simplified.py`: Script to evaluate trained agents against each other in the simplified environment
 - `saved_models/`: Directory for saved model checkpoints
 - `plots/`: Directory for training and evaluation plots
+- `evaluation_results/`: Directory for evaluation statistics and visualizations
 
 ## Requirements
 
@@ -101,14 +103,26 @@ The project implements two different RL approaches:
    2. Continue training in the full environment to learn advanced strategies
 
 4. Evaluate trained agents against each other:
+
+   **Regular environment (with all features):**
    ```
    python pit_agents.py --dqn-model saved_models/dqn_snake1/model_final.pth --ac-model saved_models/a2c_snake2/model_final.pth --episodes 100
    ```
-   Additional options:
+   
+   **Simplified environment (with fewer obstacles and no power-ups):**
+   ```
+   python pit_simplified.py --dqn-model saved_models/dqn_simplified/model_final.pth --ac-model saved_models/a2c_simplified/model_final.pth --episodes 100 --wall-count 3
+   ```
+   
+   Additional options for both evaluation scripts:
    - `--no-render`: Disable rendering
-   - `--delay`: Delay between frames when rendering
-   - `--grid-size`: Size of the game grid
-   - `--max-steps`: Maximum steps per episode
+   - `--delay`: Delay between frames when rendering (default: 0.05)
+   - `--grid-size`: Size of the game grid (default: 20)
+   - `--max-steps`: Maximum steps per episode (default: 1000)
+   - `--save-dir`: Directory to save evaluation results (default: './evaluation_results')
+   
+   Additional options for simplified environment only:
+   - `--wall-count`: Number of walls in simplified environment (default: 3)
 
 ## Game Controls
 
