@@ -19,6 +19,7 @@ This project implements a competitive snake game environment where two snakes co
 The project implements two different RL approaches:
 
 1. **Snake 1: Deep Q-Network (DQN) with Dueling Architecture**
+
    - Value-based reinforcement learning
    - Double DQN for more stable learning
    - Dueling architecture to separately estimate state value and action advantages
@@ -63,28 +64,33 @@ The project implements two different RL approaches:
 ## Getting Started
 
 1. Install the required packages:
-   ```
+
+   ```bash
    pip install torch numpy matplotlib pygame
    ```
 
 2. Run the game with random actions to test the environment:
-   ```
+
+   ```bash
    python run_game.py
    ```
 
 3. Train both agents:
 
    **Regular environment (with all features):**
-   ```
+
+   ```bash
    python train_both_agents.py --episodes 1000 --grid-size 20
    ```
-   
+
    **Simplified environment (for more effective training):**
-   ```
+
+   ```bash
    python train_simplified.py --episodes 5000 --grid-size 20 --wall-count 3
    ```
-   
+
    Additional options:
+
    - `--render`: Render training episodes
    - `--save-freq`: Frequency to save model checkpoints
    - `--max-steps`: Maximum steps per episode
@@ -92,36 +98,42 @@ The project implements two different RL approaches:
    - `--load-dqn`: Path to existing DQN model to continue training
    - `--load-a2c`: Path to existing A2C model to continue training
    - `--wall-count`: Number of walls in simplified environment (only for train_simplified.py)
-   
+
    To continue training from saved models:
-   ```
+
+   ```bash
    python train_both_agents.py --episodes 500 --load-dqn saved_models/dqn_snake1/model_episode_1000.pth --load-a2c saved_models/a2c_snake2/model_episode_1000.pth
    ```
-   
+
    Recommended training approach:
+
    1. Start with simplified environment to learn basic navigation and food collection
    2. Continue training in the full environment to learn advanced strategies
 
 4. Evaluate trained agents against each other:
 
    **Regular environment (with all features):**
-   ```
+
+   ```bash
    python pit_agents.py --dqn-model saved_models/dqn_snake1/model_final.pth --ac-model saved_models/a2c_snake2/model_final.pth --episodes 100
    ```
-   
+
    **Simplified environment (with fewer obstacles and no power-ups):**
-   ```
+
+   ```bash
    python pit_simplified.py --dqn-model saved_models/dqn_simplified/model_final.pth --ac-model saved_models/a2c_simplified/model_final.pth --episodes 100 --wall-count 3
    ```
-   
+
    Additional options for both evaluation scripts:
+
    - `--no-render`: Disable rendering
    - `--delay`: Delay between frames when rendering (default: 0.05)
    - `--grid-size`: Size of the game grid (default: 20)
    - `--max-steps`: Maximum steps per episode (default: 1000)
    - `--save-dir`: Directory to save evaluation results (default: './evaluation_results')
-   
+
    Additional options for simplified environment only:
+
    - `--wall-count`: Number of walls in simplified environment (default: 3)
 
 ## Game Controls

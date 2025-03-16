@@ -1,0 +1,13 @@
+===== Simplified Environment Evaluation Results =====
+Environment: Simplified (Wall Count: 3)
+Episodes: 2
+DQN Model: saved_models/dqn_snake1/model_final.pth
+A2C Model: saved_models/a2c_snake2/model_final.pth
+
+DQN Wins: 1 (50.00%)
+A2C Wins: 1 (50.00%)
+Ties: 0 (0.00%)
+
+Average DQN Score: 0.00
+Average A2C Score: 6.50
+Average Episode Length: 505.00 steps
